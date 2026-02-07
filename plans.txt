@@ -1,0 +1,359 @@
+Two modules Users and Orders. These modules should be designed to handle large-scale data, potentially millions of records. Therefore, the system should include efficient search functionality (similar to Elasticsearch), a queue system for background processing, and proper performance optimization.
+
+Each module will include APIs to list, create, update, and delete records. The APIs must support pagination, advanced search capabilities, and caching of search results to improve performance.
+
+The primary technologies used for development will be Laravel and MySQL.
+=========================================================================================================================================
+TODO: Follow current directory structure. TODO: Later switch to TDD.
+
+project-root/
+├─ app/
+│  ├─ Console/
+│  │  └─ Commands/
+│  │
+│  ├─ Exceptions/
+│  │  └─ Handler.php
+│  │
+│  ├─ Http/
+│  │  ├─ Controllers/
+│  │  │  └─ Api/
+│  │  │     └─ V1/
+│  │  │        ├─ UsersController.php
+│  │  │        ├─ UserSearchController.php
+│  │  │        ├─ OrdersController.php
+│  │  │        └─ OrderSearchController.php
+│  │  │
+│  │  ├─ Middleware/
+│  │  │
+│  │  ├─ Requests/
+│  │  │  └─ Api/
+│  │  │     └─ V1/
+│  │  │        ├─ Users/
+│  │  │        │  ├─ UserStoreRequest.php
+│  │  │        │  └─ UserUpdateRequest.php
+│  │  │        └─ Orders/
+│  │  │           ├─ OrderStoreRequest.php
+│  │  │           └─ OrderUpdateRequest.php
+│  │  │
+│  │  └─ Resources/
+│  │     └─ Api/
+│  │        └─ V1/
+│  │           ├─ UserResource.php
+│  │           ├─ UserCollection.php
+│  │           ├─ OrderResource.php
+│  │           └─ OrderCollection.php
+│  │
+│  ├─ Models/
+│  │  ├─ User.php
+│  │  └─ Order.php
+│  │
+│  ├─ Policies/
+│  │  ├─ UserPolicy.php
+│  │  └─ OrderPolicy.php
+│  │
+│  ├─ Providers/
+│  │  ├─ AppServiceProvider.php
+│  │  ├─ AuthServiceProvider.php
+│  │  └─ RouteServiceProvider.php
+│  │
+│  ├─ Actions/                 # “use-cases” (good bridge to DDD later)
+│  │  ├─ Users/
+│  │  │  ├─ CreateUserAction.php
+│  │  │  ├─ UpdateUserAction.php
+│  │  │  ├─ DeleteUserAction.php
+│  │  │  ├─ GetUserAction.php
+│  │  │  ├─ ListUsersAction.php
+│  │  │  └─ SearchUsersAction.php
+│  │  └─ Orders/
+│  │     ├─ CreateOrderAction.php
+│  │     ├─ UpdateOrderAction.php
+│  │     ├─ DeleteOrderAction.php
+│  │     ├─ GetOrderAction.php
+│  │     ├─ ListOrdersAction.php
+│  │     └─ SearchOrdersAction.php
+│  │
+│  ├─ Services/                # domain-ish services (search, cache, etc.)
+│  │  ├─ Search/
+│  │  │  ├─ UserSearchService.php
+│  │  │  └─ OrderSearchService.php
+│  │  ├─ Cache/
+│  │  │  ├─ UserCacheService.php
+│  │  │  └─ OrderCacheService.php
+│  │  └─ Performance/
+│  │     └─ QueryProfiler.php  # optional helper
+│  │
+│  ├─ Repositories/            # abstraction over data access (SOLID bridge)
+│  │  ├─ Contracts/
+│  │  │  ├─ UserRepository.php
+│  │  │  └─ OrderRepository.php
+│  │  └─ Eloquent/
+│  │     ├─ EloquentUserRepository.php
+│  │     └─ EloquentOrderRepository.php
+│  │
+│  ├─ Jobs/
+│  │  ├─ ReindexUserJob.php
+│  │  ├─ ReindexOrderJob.php
+│  │  └─ ExportUsersJob.php     # optional
+│  │
+│  ├─ Events/
+│  │  ├─ UserCreated.php
+│  │  ├─ UserUpdated.php
+│  │  ├─ OrderCreated.php
+│  │  └─ OrderUpdated.php
+│  │
+│  ├─ Listeners/
+│  │  ├─ QueueUserReindex.php
+│  │  └─ QueueOrderReindex.php
+│  │
+│  ├─ DTO/
+│  │  ├─ Users/
+│  │  │  ├─ UserData.php
+│  │  │  ├─ UserFilter.php
+│  │  │  └─ UserSearchQuery.php
+│  │  └─ Orders/
+│  │     ├─ OrderData.php
+│  │     ├─ OrderFilter.php
+│  │     └─ OrderSearchQuery.php
+│  │
+│  └─ Support/
+│     ├─ Cache/
+│     │  ├─ CacheKey.php
+│     │  └─ CacheVersion.php
+│     ├─ Pagination/
+│     │  ├─ CursorPagination.php
+│     │  └─ PaginationParams.php
+│     └─ Response/
+│        └─ ApiResponse.php
+│
+├─ routes/
+│  ├─ api.php
+│  └─ api_v1.php                # optional: keep v1 routes separate
+│
+├─ database/
+│  ├─ migrations/
+│  ├─ factories/
+│  └─ seeders/
+│
+├─ config/
+│  ├─ cache.php
+│  ├─ queue.php
+│  └─ scout.php                 # if using search engine
+│
+├─ tests/
+│  ├─ Feature/
+│  │  └─ Api/
+│  │     └─ V1/
+│  │        ├─ Users/
+│  │        └─ Orders/
+│  └─ Unit/
+│
+└─ docs/
+   ├─ api/
+   ├─ decisions/                # lightweight ADRs
+   └─ performance/
+
+
+============================================================================================================================================For your requirements (millions of records, advanced search, queues, high-performance APIs), I’d suggest this architecture:
+
+                                                                                                                                            Core stack
+                                                                                                                                            Laravel 12 + MySQL/PostgreSQL for source-of-truth transactional data.
+                                                                                                                                            Redis for cache + queue backend.
+                                                                                                                                            Laravel Horizon for queue monitoring and scaling.
+                                                                                                                                            Laravel Scout + OpenSearch/Elasticsearch for “Elasticsearch-like” advanced search.
+                                                                                                                                            Use Meilisearch/Typesense only if you want simpler ops and can accept fewer analytics/query capabilities.
+                                                                                                                                            API design (Users, Orders, etc.)
+                                                                                                                                            CRUD endpoints per module, but keep list endpoints query-driven with strict filter/sort whitelist.
+                                                                                                                                            Use cursor pagination for large lists (better than offset at scale).
+                                                                                                                                            Support search params like keyword, filters, ranges, sort, and facets.
+                                                                                                                                            Version APIs from day one (/api/v1/...).
+                                                                                                                                            Search strategy
+                                                                                                                                            Write to DB first, then index to search engine asynchronously via queue.
+                                                                                                                                            Keep indexed fields explicit (searchable/filterable/sortable).
+                                                                                                                                            Reindex jobs + dead-letter/retry policy for failed indexing.
+                                                                                                                                            Use eventual consistency pattern (DB is truth, search index is read-optimized).
+                                                                                                                                            Caching strategy
+                                                                                                                                            Cache list/search responses with short TTL + tag-based invalidation per module.
+                                                                                                                                            Cache hot lookups (user:id, order:id) aggressively.
+                                                                                                                                            Invalidate related cache on create/update/delete and on reindex completion.
+                                                                                                                                            Use Redis only (avoid DB/file cache for this workload).
+                                                                                                                                            Queue/background processing
+                                                                                                                                            Split queues by workload: high, default, search-index, emails, reports.
+                                                                                                                                            Use Horizon with separate worker counts and balancing per queue.
+                                                                                                                                            Make jobs idempotent, retry-safe, and observable (timeouts, backoff, failed jobs alerts).
+                                                                                                                                            Data/performance fundamentals
+                                                                                                                                            Add proper DB indexes for all filter/sort columns (including composite indexes).
+                                                                                                                                            Prevent N+1 queries; enforce eager loading policy.
+                                                                                                                                            Use async for heavy tasks (exports, imports, analytics, notifications).
+                                                                                                                                            Add rate limiting for auth/search-heavy endpoints.
+                                                                                                                                            Suggested rollout order
+                                                                                                                                            Build Users and Orders CRUD with validation + cursor pagination.
+                                                                                                                                            Add Redis cache + invalidation.
+                                                                                                                                            Add queue/Horizon for async work.
+                                                                                                                                            Add Scout + OpenSearch for advanced search.
+                                                                                                                                            Add monitoring, load testing, and query/index tuning before production.
+                                                                                                                                            ==========================================================================================================
+
+Architect Awareness
+-------------------
+Abstraction over implementation (search providers)
+
+Failure domain consideration (fallbacks, reliability)
+
+Scalability patterns (cursor pagination, caching strategies)
+
+Observability mindset (logging, metrics)
+
+Decision documentation (ADRs)
+================================================================================================================================================================================
+DDD Architecture design
+project-root/
+├─ app/
+│  ├─ Http/
+│  │  ├─ Controllers/Api/V1/
+│  │  │  ├─ UsersController.php
+│  │  │  ├─ UserSearchController.php
+│  │  │  ├─ OrdersController.php
+│  │  │  └─ OrderSearchController.php
+│  │  ├─ Requests/Api/V1/
+│  │  │  ├─ Users/
+│  │  │  │  ├─ UserStoreRequest.php
+│  │  │  │  └─ UserUpdateRequest.php
+│  │  │  └─ Orders/
+│  │  │     ├─ OrderStoreRequest.php
+│  │  │     └─ OrderUpdateRequest.php
+│  │  ├─ Resources/Api/V1/
+│  │  │  ├─ UserResource.php
+│  │  │  ├─ UserCollection.php
+│  │  │  ├─ OrderResource.php
+│  │  │  └─ OrderCollection.php
+│  │  └─ Middleware/
+│  └─ Providers/
+│     └─ DomainServiceProvider.php
+│
+├─ src/
+│  ├─ Shared/
+│  │  ├─ Application/
+│  │  │  ├─ Cache/
+│  │  │  │  ├─ CacheKey.php
+│  │  │  │  └─ CacheVersion.php
+│  │  │  ├─ Pagination/
+│  │  │  │  ├─ CursorPagination.php
+│  │  │  │  └─ PageRequest.php
+│  │  │  └─ Result/
+│  │  │     ├─ ApiResult.php
+│  │  │     └─ ErrorResult.php
+│  │  ├─ Domain/
+│  │  │  ├─ ValueObjects/
+│  │  │  ├─ Exceptions/
+│  │  │  └─ Contracts/
+│  │  └─ Infrastructure/
+│  │     ├─ Cache/
+│  │     ├─ Queue/
+│  │     └─ Search/
+│  │
+│  ├─ Users/
+│  │  ├─ Domain/
+│  │  │  ├─ Entities/
+│  │  │  │  └─ User.php
+│  │  │  ├─ ValueObjects/
+│  │  │  │  ├─ UserId.php
+│  │  │  │  └─ Email.php
+│  │  │  ├─ Enums/
+│  │  │  │  └─ UserStatus.php
+│  │  │  ├─ Events/
+│  │  │  ├─ Exceptions/
+│  │  │  └─ Repositories/
+│  │  │     └─ UserRepository.php
+│  │  ├─ Application/
+│  │  │  ├─ DTO/
+│  │  │  │  ├─ UserData.php
+│  │  │  │  ├─ UserFilter.php
+│  │  │  │  └─ UserSearchQuery.php
+│  │  │  └─ UseCases/
+│  │  │     ├─ CreateUser.php
+│  │  │     ├─ UpdateUser.php
+│  │  │     ├─ DeleteUser.php
+│  │  │     ├─ GetUser.php
+│  │  │     ├─ ListUsers.php
+│  │  │     └─ SearchUsers.php
+│  │  └─ Infrastructure/
+│  │     ├─ Persistence/
+│  │     │  ├─ Eloquent/
+│  │     │  │  ├─ Models/
+│  │     │  │  │  └─ UserModel.php
+│  │     │  │  └─ Repositories/
+│  │     │  │     └─ EloquentUserRepository.php
+│  │     │  └─ Mappers/
+│  │     │     └─ UserMapper.php
+│  │     ├─ Search/
+│  │     │  ├─ UserSearchService.php
+│  │     │  └─ UserIndexDefinition.php
+│  │     ├─ Cache/
+│  │     │  └─ UserCacheService.php
+│  │     └─ Queue/
+│  │        ├─ Jobs/
+│  │        │  └─ ReindexUserJob.php
+│  │        └─ Listeners/
+│  │           └─ QueueUserReindex.php
+│  │
+│  └─ Orders/
+│     ├─ Domain/
+│     │  ├─ Entities/
+│     │  │  └─ Order.php
+│     │  ├─ ValueObjects/
+│     │  │  ├─ OrderId.php
+│     │  │  └─ Money.php
+│     │  ├─ Enums/
+│     │  │  └─ OrderStatus.php
+│     │  ├─ Events/
+│     │  ├─ Exceptions/
+│     │  └─ Repositories/
+│     │     └─ OrderRepository.php
+│     ├─ Application/
+│     │  ├─ DTO/
+│     │  │  ├─ OrderData.php
+│     │  │  ├─ OrderFilter.php
+│     │  │  └─ OrderSearchQuery.php
+│     │  └─ UseCases/
+│     │     ├─ CreateOrder.php
+│     │     ├─ UpdateOrder.php
+│     │     ├─ DeleteOrder.php
+│     │     ├─ GetOrder.php
+│     │     ├─ ListOrders.php
+│     │     └─ SearchOrders.php
+│     └─ Infrastructure/
+│        ├─ Persistence/
+│        │  ├─ Eloquent/
+│        │  │  ├─ Models/
+│        │  │  │  └─ OrderModel.php
+│        │  │  └─ Repositories/
+│        │  │     └─ EloquentOrderRepository.php
+│        │  └─ Mappers/
+│        │     └─ OrderMapper.php
+│        ├─ Search/
+│        │  ├─ OrderSearchService.php
+│        │  └─ OrderIndexDefinition.php
+│        ├─ Cache/
+│        │  └─ OrderCacheService.php
+│        └─ Queue/
+│           ├─ Jobs/
+│           │  └─ ReindexOrderJob.php
+│           └─ Listeners/
+│              └─ QueueOrderReindex.php
+│
+├─ routes/
+│  ├─ api.php
+│  └─ api_v1.php
+├─ database/
+│  ├─ migrations/
+│  ├─ factories/
+│  └─ seeders/
+├─ tests/
+│  ├─ Feature/Api/V1/
+│  │  ├─ Users/
+│  │  └─ Orders/
+│  └─ Unit/
+└─ docs/
+   ├─ adr/
+   ├─ api/
+   └─ performance/

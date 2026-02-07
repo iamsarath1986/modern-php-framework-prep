@@ -1,0 +1,2 @@
+Service Container: the engine that stores/resolves dependencies (DI system).
+Service Provider: the place where you configure/bootstrap services (register bindings, run startup logic).
