@@ -1,2 +1,14 @@
 Service Container: the engine that stores/resolves dependencies (DI system).
 Service Provider: the place where you configure/bootstrap services (register bindings, run startup logic).
+
+Chunk process:
+
+Iteration 1:
+    Laravel creates only 1,000 User objects. Memory usage is low (e.g., 20MB).
+    It inserts them into the database.
+    Crucially: The loop finishes this iteration. The $users variable (holding those 1,000 objects) goes out of scope.
+    PHP Garbage Collector runs and frees up that 20MB of memory.
+Iteration 2:
+    Laravel starts fresh. It creates another 1,000 objects. Memory goes back up to ~20MB (not 40MB).
+    It inserts them.
+    It frees the memory again.

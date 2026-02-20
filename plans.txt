@@ -1,8 +1,8 @@
-Two modules Users and Orders. These modules should be designed to handle large-scale data, potentially millions of records. Therefore, the system should include efficient search functionality (similar to Elasticsearch), a queue system for background processing, and proper performance optimization.
+Two modules Users and Orders. These modules should be designed to handle large-scale data, potentially millions of records. Therefore, 
+the system should include efficient search functionality (similar to Elasticsearch), a queue system for background processing, and proper performance optimization.
 
-Each module will include APIs to list, create, update, and delete records. The APIs must support pagination, advanced search capabilities, and caching of search results to improve performance.
-
-The primary technologies used for development will be Laravel and MySQL.
+Each module will include APIs to list, create, update, and delete records. The APIs must support pagination, advanced search capabilities, 
+and caching of search results to improve performance.
 =========================================================================================================================================
 TODO: Follow current directory structure. TODO: Later switch to TDD.
 
@@ -152,46 +152,6 @@ project-root/
    ├─ decisions/                # lightweight ADRs
    └─ performance/
 
-
-============================================================================================================================================For your requirements (millions of records, advanced search, queues, high-performance APIs), I’d suggest this architecture:
-
-                                                                                                                                            Core stack
-                                                                                                                                            Laravel 12 + MySQL/PostgreSQL for source-of-truth transactional data.
-                                                                                                                                            Redis for cache + queue backend.
-                                                                                                                                            Laravel Horizon for queue monitoring and scaling.
-                                                                                                                                            Laravel Scout + OpenSearch/Elasticsearch for “Elasticsearch-like” advanced search.
-                                                                                                                                            Use Meilisearch/Typesense only if you want simpler ops and can accept fewer analytics/query capabilities.
-                                                                                                                                            API design (Users, Orders, etc.)
-                                                                                                                                            CRUD endpoints per module, but keep list endpoints query-driven with strict filter/sort whitelist.
-                                                                                                                                            Use cursor pagination for large lists (better than offset at scale).
-                                                                                                                                            Support search params like keyword, filters, ranges, sort, and facets.
-                                                                                                                                            Version APIs from day one (/api/v1/...).
-                                                                                                                                            Search strategy
-                                                                                                                                            Write to DB first, then index to search engine asynchronously via queue.
-                                                                                                                                            Keep indexed fields explicit (searchable/filterable/sortable).
-                                                                                                                                            Reindex jobs + dead-letter/retry policy for failed indexing.
-                                                                                                                                            Use eventual consistency pattern (DB is truth, search index is read-optimized).
-                                                                                                                                            Caching strategy
-                                                                                                                                            Cache list/search responses with short TTL + tag-based invalidation per module.
-                                                                                                                                            Cache hot lookups (user:id, order:id) aggressively.
-                                                                                                                                            Invalidate related cache on create/update/delete and on reindex completion.
-                                                                                                                                            Use Redis only (avoid DB/file cache for this workload).
-                                                                                                                                            Queue/background processing
-                                                                                                                                            Split queues by workload: high, default, search-index, emails, reports.
-                                                                                                                                            Use Horizon with separate worker counts and balancing per queue.
-                                                                                                                                            Make jobs idempotent, retry-safe, and observable (timeouts, backoff, failed jobs alerts).
-                                                                                                                                            Data/performance fundamentals
-                                                                                                                                            Add proper DB indexes for all filter/sort columns (including composite indexes).
-                                                                                                                                            Prevent N+1 queries; enforce eager loading policy.
-                                                                                                                                            Use async for heavy tasks (exports, imports, analytics, notifications).
-                                                                                                                                            Add rate limiting for auth/search-heavy endpoints.
-                                                                                                                                            Suggested rollout order
-                                                                                                                                            Build Users and Orders CRUD with validation + cursor pagination.
-                                                                                                                                            Add Redis cache + invalidation.
-                                                                                                                                            Add queue/Horizon for async work.
-                                                                                                                                            Add Scout + OpenSearch for advanced search.
-                                                                                                                                            Add monitoring, load testing, and query/index tuning before production.
-                                                                                                                                            ==========================================================================================================
 
 Architect Awareness
 -------------------
